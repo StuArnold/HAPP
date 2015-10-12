@@ -33,7 +33,7 @@ public class TempBasal extends Model {
     public Date     start_time;             //When the Temp Basal started
     @Expose
     @Column(name = "basal_adjustemnt")
-    public String   basal_adjustemnt;       //High or Low temp
+    public String   basal_adjustemnt="";    //High or Low temp
     @Expose
     @Column(name = "current_pump_basal")
     public Double   current_pump_basal;     //Pumps current basal

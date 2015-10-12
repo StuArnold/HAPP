@@ -100,7 +100,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
             e.printStackTrace();
         }
         //openAPSPredictValue.add(new PointValue((float) (timeeNow.getTime() / fuzz), (float) Bg.last().sgv_double()));
-        openAPSPredictValue.add(new PointValue((float) (in15mins.getTime() / fuzz), snoozeBG.floatValue()));
+        openAPSPredictValue.add(new PointValue((float) (in15mins.getTime() / fuzz),(float) unitized(snoozeBG.floatValue())));
     }
     //##### Adds OpenAPS eventualBG to BG chart #####
 
@@ -209,7 +209,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
     public void addBasalvsTempBasalValues(){
         Double basalDelta;
         for (Stats tempBasalReading : statsReadings) {
-            if (tempBasalReading.temp_basal_type != null) {
+            if (tempBasalReading.temp_basal_type.equals("High") || tempBasalReading.temp_basal_type.equals("Low")) {  //Has a Temp Basal been set?
                 basalDelta = tempBasalReading.temp_basal - tempBasalReading.basal;                  //Delta between normal Basal and Temp Basal set
             } else {
                 basalDelta = 0D;                                                                    //No Temp Basal set
@@ -220,7 +220,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
 
 
     //##########IOB COB Past Line Chart##########
-    public LineChartData iobcobPastLineData() {
+    public LineChartData iobcobPastLineData() {                                                     //// TODO: 09/10/2015 frequent null pointer crashes here 
         LineChartData lineData = new LineChartData(iobcobPastdefaultLines());
         lineData.setAxisYLeft(iobPastyAxis());
         lineData.setAxisYRight(cobPastyAxis());
@@ -233,10 +233,10 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
         addfutureValues();
         List<Line> lines = new ArrayList<Line>();
         lines.add(minShowLine());
-        //lines.add(iobValuesLine());// TODO: 22/09/2015 debugging
+        lines.add(iobValuesLine());// TODO: 22/09/2015 debugging
         lines.add(cobValuesLine());
-        //lines.add(iobFutureLine());// TODO: 22/09/2015 debugging
-        //lines.add(cobFutureLine());// TODO: 22/09/2015 debugging
+        lines.add(iobFutureLine());// TODO: 22/09/2015 debugging
+        lines.add(cobFutureLine());// TODO: 22/09/2015 debugging
         return lines;
     }
     public Line maxiobcobShowLine() {
