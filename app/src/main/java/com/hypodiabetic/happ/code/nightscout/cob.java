@@ -12,6 +12,7 @@ import org.json.JSONObject;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Created by tim on 03/08/2015.
@@ -47,6 +48,8 @@ public class cob {
 
 
             for(Treatments treatment : treatments) {
+
+                if (treatment.type == null) continue;                                               //bad treatment, missing data
 
                 if (treatment.type.equals("Carbs") && treatment.datetime < timeNow.getTime()) {                             //Carbs only and Treatment is not in the future
 
@@ -120,7 +123,7 @@ public class cob {
             returnObject.put("isDecaying", isDecaying);                                             //Are these carbs being digested?
             returnObject.put("carbs_hr", profileNow.carbAbsorptionRate);                            //How many crabs / H are digested
             returnObject.put("rawCarbImpact", rawCarbImpact);                                       //?
-            returnObject.put("cob", String.format("%.2f",totalCOB));                                                      //Total Carbs on board
+            returnObject.put("cob", String.format(Locale.ENGLISH, "%.2f",totalCOB));                                                      //Total Carbs on board
             returnObject.put("display", display);
             returnObject.put("displayLine", "COB: " + display + "g");
             returnObject.put("as_of",timeNow.getTime());                                            //Time this was requested

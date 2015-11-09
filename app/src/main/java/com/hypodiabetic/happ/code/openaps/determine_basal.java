@@ -3,6 +3,7 @@ package com.hypodiabetic.happ.code.openaps;
 import android.content.Context;
 import android.util.Log;
 
+import com.crashlytics.android.Crashlytics;
 import com.hypodiabetic.happ.Objects.TempBasal;
 import com.hypodiabetic.happ.Objects.Profile;
 import com.hypodiabetic.happ.Objects.Treatments;
@@ -70,7 +71,7 @@ public class determine_basal {
             return o;
 
         } catch (JSONException e) {
-
+            Crashlytics.logException(e);
             e.printStackTrace();
             return o;
         }
@@ -93,6 +94,7 @@ public class determine_basal {
                 requestedTemp.put("snoozeBG", "NA");
                 requestedTemp.put("reason", "Need min 2 BG readings to run OpenAPS");
             } catch (JSONException e) {
+                Crashlytics.logException(e);
                 e.printStackTrace();
             }
             return requestedTemp;
@@ -150,22 +152,23 @@ public class determine_basal {
             Double deviation = (double) Math.round( 15 / 5 * ( glucose_status.getDouble("avgdelta") - bgi ) );  //How much BG will move by in 15mins?
             //console.error("15m deviation: " + deviation.toFixed(0));
             Double bolusContrib = iob_data.getDouble("bolusiob") * profile_data.isf;                  //Amount BG will move due to Bolus treatments only
-            Double naive_eventualBG = (double) Math.round( bg - (iob_data.getDouble("iob") * profile_data.isf) ); //BG level in 15mins taking in consideration total IOB (boules + basle)
-            eventualBG = naive_eventualBG + deviation;                                              //BG level in 15mins taking in consideration total IOB (boules + basle) and deviation
-            Double naive_snoozeBG = (double) Math.round( naive_eventualBG + bolusContrib );         //Eventual BG ignoring any user Bolues
+            Double naive_eventualBG = (double) Math.round( bg - (iob_data.getDouble("iob") * profile_data.isf) ); //BG level in 15mins taking in consideration total IOB (boules + basel)
+            eventualBG = naive_eventualBG + deviation;                                              //BG level in 15mins taking in consideration total IOB (boules + basel) and deviation
+            Double naive_snoozeBG = (double) Math.round( naive_eventualBG + bolusContrib );         //Eventual BG ignoring any user Bolus
             snoozeBG = naive_snoozeBG + deviation;
             //console.error("BG: " + bg + tick + " -> " + eventualBG + "-" + snoozeBG + " (Unadjusted: " + naive_eventualBG + "-" + naive_snoozeBG + ")");
             if (eventualBG == 0) { Log.e("Error eventualBG: ", "could not calculate eventualBG"); }
 
             requestedTemp.put("deviation", deviation);
-            requestedTemp.put("temp", profile_data.basal_mode);                                     //"absolute" temp basals (U/hr) mode, "percent" of your normal basal
+            requestedTemp.put("temp", profile_data.basal_mode);                                     //"absolute" temp basel (U/hr) mode, "percent" of your normal basal
             requestedTemp.put("bg", bg);                                                            //Current BG level
             requestedTemp.put("tick", tick);                                                        //Delta between now BG and last BG
             requestedTemp.put("eventualBG", eventualBG);                                            //BG ignoring any bolus
             requestedTemp.put("snoozeBG", snoozeBG);                                                //BG including any user bolus
-            requestedTemp.put("openaps_mode", profile_data.openaps_mode);                           //OpenAPS mode HAPP added
+            requestedTemp.put("openaps_mode", profile_data.openaps_mode);                           //OpenAPS mode ####HAPP added####
 
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
         }
 
@@ -305,7 +308,7 @@ public class determine_basal {
                             Double basal_iob = iob_data.getDouble("iob") - iob_data.getDouble("bolusiob");  //Basal only IOB
                             if (basal_iob > max_iob) {                                              //Do we have too much basal iob onboard?
                                 //reason = basal_iob + ">" + max_iob;
-                                reason = "Basal IOB " + basal_iob + "> Max IOB " + max_iob;
+                                reason = "BasalIOB " + basal_iob + "> MaxIOB " + max_iob + ":";
                                 requestedTemp = setTempBasal(0D, 0, profile_data, requestedTemp);
                             }
 
@@ -327,15 +330,15 @@ public class determine_basal {
                             Double insulinScheduled = temps_data.duration * (temps_data.rate - profile_data.current_basal) / 60;
                             if (insulinScheduled > insulinReq + 0.1) { // if current temp would deliver more than the required insulin (plus a 0.1U fudge factor), lower the rate
                                 //reason = temps_data.duration + "@" + temps_data.rate + " > " + insulinReq + "U";
-                                reason = "Eventual BG > Max BG, current Temp Basal delivers more insulin than required, change to new Temp Basal";
+                                reason += "Eventual BG > Max BG, current Temp Basal delivers more insulin than required, change to new Temp Basal";
                                 requestedTemp = setTempBasal(rate, 30, profile_data, requestedTemp);
                             } else if (temps_data.duration > 0 && rate < temps_data.rate + 0.1) {   // if required temp < existing temp basal
                                 //reason = temps_data.rate + ">~" + rate;
-                                reason = "Eventual BG > Max BG, suggested rate < current Temp Basal";
+                                reason += "Eventual BG > Max BG, suggested rate < current Temp Basal";
                                 action = "Keep current Temp Basal";
                             } else {                                                                // required temp > existing temp basal
                                 //reason = temps_data.rate + "<" + rate;
-                                reason = "Eventual BG > Max BG, no Temp Basal running or current Temp Basal < suggested rate";
+                                reason += "Eventual BG > Max BG, no Temp Basal running or current Temp Basal < suggested rate";
                                 requestedTemp = setTempBasal(rate, 30, profile_data, requestedTemp);
                             }
                         } else {
@@ -370,6 +373,7 @@ public class determine_basal {
             if (!requestedTemp.has("action") && !action.equals("")){ requestedTemp.put("action", action);} //Only if setTempBasal has not provided a reason and we have logged something in action
 
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
         }
 
@@ -377,7 +381,10 @@ public class determine_basal {
         try {
             requestedTemp.put("openaps_mode", profile_data.openaps_mode);
             requestedTemp.put("openaps_loop", profile_data.openaps_loop);
-        } catch (JSONException e) {e.printStackTrace(); }
+        } catch (JSONException e) {
+            Crashlytics.logException(e);
+            e.printStackTrace();
+        }
         //##### HAPP Added #####
 
         return requestedTemp;
@@ -391,7 +398,7 @@ public class determine_basal {
 
         if (rate < 0) { rate = 0D; } // if >30m @ 0 required, zero temp will be extended to 30m instead
         else if (rate > maxSafeBasal) { rate = maxSafeBasal; }
-        rate = Double.parseDouble(String.format("%.2f", rate));
+        rate = Double.parseDouble(String.format(Locale.ENGLISH, "%.2f", rate));
 
         // rather than canceling temps, always set the current basal as a 30m temp
         // so we can see on the pump that openaps is working
@@ -414,10 +421,18 @@ public class determine_basal {
                 requestedTemp.put("rate", profile_data.current_basal);
                 requestedTemp.put("ratePercent", 100);
             } else if (rate > profile_data.current_basal && duration != 0){
-                requestedTemp.put("action", "High Temp Basal set " + rate + "U for " + duration + "mins");
+                if (profile_data.basal_mode.equals("percent")){
+                    requestedTemp.put("action", "High Temp Basal set " + ratePercent.intValue() + "% for " + duration + "mins");
+                } else {
+                    requestedTemp.put("action", "High Temp Basal set " + rate + "U for " + duration + "mins");
+                }
                 requestedTemp.put("basal_adjustemnt", "High");
             } else if (rate < profile_data.current_basal && duration != 0){
-                requestedTemp.put("action", "Low Temp Basal set " + rate + "U for " + duration + "mins");
+                if (profile_data.basal_mode.equals("percent")){
+                    requestedTemp.put("action", "Low Temp Basal set " + ratePercent.intValue() + "% for " + duration + "mins");
+                } else {
+                    requestedTemp.put("action", "Low Temp Basal set " + rate + "U for " + duration + "mins");
+                }
                 requestedTemp.put("basal_adjustemnt", "Low");
             } else if (rate == profile_data.current_basal){
                 requestedTemp.put("reason", "Keep current basal");
@@ -426,6 +441,7 @@ public class determine_basal {
                 requestedTemp.remove("rate");                                                       //Remove rate, as we do not want to suggest this Temp Basal
             }
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
         }
 

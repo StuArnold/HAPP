@@ -23,8 +23,11 @@ import android.widget.Spinner;
 import android.widget.TimePicker;
 import android.widget.Toast;
 
+import com.crashlytics.android.Crashlytics;
 import com.hypodiabetic.happ.Objects.Treatments;
+import com.hypodiabetic.happ.integration.nightscout.NSUploader;
 
+import java.text.NumberFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -75,7 +78,6 @@ public class EnterTreatment extends Activity implements View.OnFocusChangeListen
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (parent.getSelectedItem().equals("Insulin")){
-                    // TODO: 10/08/2015 treatment duration (for Insulin TempBasal) is being logged in openaps-js, but appears to never be used, not capturing it for now
                     String[] InsulinNotes = {"bolus", "TempBasal"};
                     ArrayAdapter<String> stringArrayAdapter= new ArrayAdapter<String>(EnterTreatment.this, android.R.layout.simple_spinner_dropdown_item, InsulinNotes);
                     Spinner notesSpinner= (Spinner)findViewById(R.id.noteSpinner);
@@ -148,7 +150,12 @@ public class EnterTreatment extends Activity implements View.OnFocusChangeListen
             HashMap<String, String> treatmentItem = new HashMap<String, String>();
 
             treatmentItem.put("id", treatment.getId().toString());
-            Date treatmentDate = new Date(treatment.datetime);
+            Date treatmentDate;
+            if (treatment.datetime != null){
+                treatmentDate = new Date(treatment.datetime);
+            } else {
+                treatmentDate = new Date(0);
+            }
             treatmentItem.put("date", sdf.format(treatmentDate));
             treatmentItem.put("value", treatment.value.toString());
             treatmentItem.put("type", treatment.type);
@@ -263,14 +270,19 @@ public class EnterTreatment extends Activity implements View.OnFocusChangeListen
         try {
             treatmentDateTime = sdf.parse(treatmentDateTimeString);
         } catch (ParseException e) {
-            e.printStackTrace();
+            Crashlytics.logException(e);
         }
 
         treatment.datetime          = treatmentDateTime.getTime();
         treatment.datetime_display  = treatmentDateTime.toString();
         treatment.note              = spinner_notes.getSelectedItem().toString();
         treatment.type              = spinner_treatment_type.getSelectedItem().toString();
-        treatment.value             = Double.parseDouble(editText_treatment_value.getText().toString());
+        try {
+            treatment.value = NumberFormat.getNumberInstance(java.util.Locale.UK).parse(editText_treatment_value.getText().toString()).doubleValue();
+        } catch (ParseException e){
+            Crashlytics.logException(e);
+        }
+
 
         if (treatment.value == 0) {                                                                 //No value given
             Toast.makeText(this, "Enter a value", Toast.LENGTH_SHORT).show();
@@ -283,6 +295,7 @@ public class EnterTreatment extends Activity implements View.OnFocusChangeListen
                         public void onClick(DialogInterface dialog, int which) {
 
                             treatment.save();
+                            NSUploader.uploadTreatments(MainActivity.activity);
                             Toast.makeText(view.getContext(), treatment.value + " " + treatment.type + " saved, NOT sent to Pump", Toast.LENGTH_SHORT).show();
                             loadLastTreatments();
 
@@ -301,6 +314,7 @@ public class EnterTreatment extends Activity implements View.OnFocusChangeListen
         } else {
 
             treatment.save();
+            NSUploader.uploadTreatments(this);
             Toast.makeText(this, treatment.value + " " + treatment.type + " entered", Toast.LENGTH_SHORT).show();
 
             loadLastTreatments();

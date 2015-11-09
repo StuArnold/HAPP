@@ -1,4 +1,4 @@
-package com.hypodiabetic.happ.code.nightwatch;
+package com.hypodiabetic.happ;
 
 import android.content.Context;
 import android.content.res.Resources;
@@ -6,6 +6,9 @@ import android.graphics.Bitmap;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
+
+import com.hypodiabetic.happ.code.nightwatch.BgGraphBuilder;
+
 import lecho.lib.hellocharts.model.Line;
 import lecho.lib.hellocharts.model.LineChartData;
 import lecho.lib.hellocharts.model.Viewport;
@@ -29,7 +32,7 @@ public class BgSparklineBuilder {
 
     private int width;
     private int height;
-    private BgGraphBuilder bgGraphBuilder;
+    private ExtendedGraphBuilder bgGraphBuilder;
     private LineChartView chart;
     private float end = new Date().getTime() / (float) BgGraphBuilder.fuzz;
     private float start = end - (60000*180 / (float) BgGraphBuilder.fuzz); // 3h
@@ -104,10 +107,11 @@ public class BgSparklineBuilder {
         return this.setSmallDots(true);
     }
 
-    public BgSparklineBuilder setBgGraphBuilder(BgGraphBuilder bgGraphBuilder) {
+    public BgSparklineBuilder setBgGraphBuilder(ExtendedGraphBuilder bgGraphBuilder) {
         this.bgGraphBuilder = bgGraphBuilder;
         return this;
     }
+
 
     BgSparklineBuilder(Context context) {
         mContext = context;

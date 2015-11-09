@@ -3,6 +3,7 @@ package com.hypodiabetic.happ.code.openaps;
 import android.util.Log;
 
 //import com.hypodiabetic.happ.DBHelper;
+import com.crashlytics.android.Crashlytics;
 import com.hypodiabetic.happ.Objects.Profile;
 import com.hypodiabetic.happ.Objects.Treatments;
 //import com.hypodiabetic.happ.TreatmentsRepo;
@@ -13,6 +14,7 @@ import org.json.JSONObject;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 
 /**
@@ -68,6 +70,7 @@ public class iob {
                 return returnValue;
 
             } catch (JSONException e) {
+                Crashlytics.logException(e);
                 e.printStackTrace();
                 return returnValue;
             }
@@ -90,6 +93,9 @@ public class iob {
         try {
 
             for (Treatments treatment : treatments) {
+
+                if (treatment.type == null) continue;                                               //bad treatment, missing data
+
                 if (treatment.type.equals("Insulin") && treatment.datetime.longValue() < time.getTime()) {      //Insulin only and Treatment is not in the future
 
                         Double dia = profileNow.dia;                                                            //How long Insulin stays active in your system
@@ -110,13 +116,14 @@ public class iob {
                 }
             }
 
-            returnValue.put("iob", String.format("%.2f", iob));                          //Total IOB
+            returnValue.put("iob", String.format(Locale.ENGLISH, "%.2f", iob));                          //Total IOB
             returnValue.put("activity", activity);                                                  //Total Amount of insulin active at this time
-            returnValue.put("bolusiob", String.format("%.2f", bolusiob));                                                  //Total Bolus IOB (User entered, assumed when eating) DIA is twice as fast
+            returnValue.put("bolusiob", String.format(Locale.ENGLISH, "%.2f", bolusiob));                                                  //Total Bolus IOB (User entered, assumed when eating) DIA is twice as fast
             returnValue.put("as_of", time.getTime());                                               //Date this request was made
             return returnValue;
 
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
             return returnValue;
         }
@@ -175,6 +182,7 @@ public class iob {
                 //}
             }
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
         }
 
@@ -185,6 +193,7 @@ public class iob {
                 }
             }
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
         }
 
@@ -219,6 +228,7 @@ public class iob {
             return tempBoluses;
 
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
             return tempBoluses;
         }

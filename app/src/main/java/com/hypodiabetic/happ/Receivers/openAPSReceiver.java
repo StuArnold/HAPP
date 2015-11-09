@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
+import com.crashlytics.android.Crashlytics;
 import com.hypodiabetic.happ.MainActivity;
 import com.hypodiabetic.happ.Objects.TempBasal;
 import com.hypodiabetic.happ.Objects.Profile;
@@ -33,18 +34,26 @@ public class openAPSReceiver extends BroadcastReceiver{
 
             //formats deviation
             try {
-                Double deviation = openAPSSuggest.getDouble("deviation");
-                openAPSSuggest.remove("deviation");
+                Double deviation = 0D;
+                if (openAPSSuggest.has("deviation")){
+                    deviation = openAPSSuggest.getDouble("deviation");
+                    openAPSSuggest.remove("deviation");
+                }
+
                 if (deviation > 0) {
                     openAPSSuggest.put("deviation", "+" + tools.unitizedBG(deviation, context));
                 } else {
                     openAPSSuggest.put("deviation", tools.unitizedBG(deviation, context));
                 }
             } catch (JSONException e) {
+                Crashlytics.logException(e);
                 e.printStackTrace();
             }
 
-            MainActivity.getInstace().updateOpenAPSDetails(openAPSSuggest);                         //Updates the Main Activity screen with results
+            Intent intent = new Intent("ACTION_UPDATE_OPENAPS");
+            intent.putExtra("openAPSSuggest", openAPSSuggest.toString());
+            context.sendBroadcast(intent);
+            //MainActivity.getInstace().updateOpenAPSDetails(openAPSSuggest);                         //Updates the Main Activity screen with results
 
         }
 }

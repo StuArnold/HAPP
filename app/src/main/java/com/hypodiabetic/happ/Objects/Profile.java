@@ -46,7 +46,6 @@ public class Profile extends Model{
         ProfileNow.max_iob              = Double.parseDouble(prefs.getString("max_iob", "3"));
         ProfileNow.dia                  = Double.parseDouble(prefs.getString("dia", "1.5"));
         ProfileNow.current_basal        = getCurrent_basal(thisTime, prefs);
-        ProfileNow.isf                  = getCurrent_isf(thisTime, prefs);
         ProfileNow.carbRatio            = getCurrent_carbratio(thisTime, prefs);
 
         ProfileNow.max_basal            = Double.parseDouble(prefs.getString("max_basal", "2"));
@@ -61,6 +60,7 @@ public class Profile extends Model{
         ProfileNow.max_bg               = Double.parseDouble(tools.inmgdl(Double.parseDouble(prefs.getString("highValue", "170")), c));
         ProfileNow.min_bg               = Double.parseDouble(tools.inmgdl(Double.parseDouble(prefs.getString("lowValue", "70")), c));
         ProfileNow.target_bg            = Double.parseDouble(tools.inmgdl(Double.parseDouble(prefs.getString("target_bg", "100")), c));
+        ProfileNow.isf                  = Double.parseDouble(tools.inmgdl(getCurrent_isf(thisTime, prefs), c));
 
         return ProfileNow;
     }
@@ -109,21 +109,21 @@ public class Profile extends Model{
         Calendar calendarNow = GregorianCalendar.getInstance();
         calendarNow.setTime(dateNow);
         Integer hourNow = calendarNow.get(Calendar.HOUR_OF_DAY);
-        Integer carbratioNow;
+        Double carbratioNow;
 
         while (true) {
             if (prefs.getString("carbratio_" + hourNow, "empty").equals("empty") || prefs.getString("carbratio_" + hourNow, "").equals("")) {
                 hourNow--;
                 if (hourNow < 0){                                                                   //Cannot find a Basal Rate for this time or previous time
-                    carbratioNow = 0;
+                    carbratioNow = 0D;
                     break;
                 }
             } else {
-                carbratioNow = Integer.parseInt(prefs.getString("carbratio_" + hourNow, "0"));            //Found a Basal rate for this time or a time before
+                carbratioNow = Double.parseDouble(prefs.getString("carbratio_" + hourNow, "0"));      //Found a Basal rate for this time or a time before
                 break;
             }
         }
-        return carbratioNow;
+        return carbratioNow.intValue();                                                             //This converts Double values entered by the user into a Int, as expected
     }
 
 

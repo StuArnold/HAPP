@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.widget.Toast;
 
+import com.crashlytics.android.Crashlytics;
 import com.hypodiabetic.happ.MainActivity;
 import com.hypodiabetic.happ.Objects.TempBasal;
 import com.hypodiabetic.happ.Objects.Profile;
@@ -46,13 +47,16 @@ public class statsReceiver extends BroadcastReceiver {
                 stat.temp_basal_type    = currentTempBasal.basal_adjustemnt;
 
             } catch (Exception e)  {
+                Crashlytics.logException(e);
                 Toast.makeText(context, "Error getting Stats", Toast.LENGTH_LONG).show();
             }
 
 
         stat.save();                                                                                //Records Stat for now to DB (not future stats)
 
-        MainActivity.getInstace().updateStats();                                                    //Updates the Main Activity screen
+        Intent intent = new Intent("ACTION_UPDATE_STATS");
+        context.sendBroadcast(intent);
+        //MainActivity.getInstace().updateStats();                                                    //Updates the Main Activity screen
 
     }
 

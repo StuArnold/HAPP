@@ -2,6 +2,7 @@ package com.hypodiabetic.happ;
 
 import android.content.Context;
 
+import com.crashlytics.android.Crashlytics;
 import com.hypodiabetic.happ.Objects.Profile;
 import com.hypodiabetic.happ.Objects.Stats;
 import com.hypodiabetic.happ.Objects.Treatments;
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.Random;
 import java.util.TimeZone;
 
 import lecho.lib.hellocharts.model.Axis;
@@ -90,58 +92,72 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
         return openAPSPredictLine;
     }
     public void getOpenAPSPredictValues() {
+        openAPSPredictValue.clear();                                                                //clears past values
         JSONObject openAPSSuggest = determine_basal.runOpenAPS(context);                            //Run OpenAPS
         Date timeeNow = new Date();
         Date in15mins = new Date(timeeNow.getTime() + 15*60000);
         Double snoozeBG=0D;
+
         try {
-            snoozeBG = openAPSSuggest.getDouble("eventualBG");
+            if (!openAPSSuggest.isNull("eventualBG") && !openAPSSuggest.getString("eventualBG").equals("NA")) snoozeBG = openAPSSuggest.getDouble("eventualBG");
+            if (snoozeBG >= 400){
+                snoozeBG = 400D;
+            } if (snoozeBG < 0D){
+                snoozeBG = 0D;
+            }
         } catch (JSONException e) {
+            Crashlytics.logException(e);
             e.printStackTrace();
         }
         //openAPSPredictValue.add(new PointValue((float) (timeeNow.getTime() / fuzz), (float) Bg.last().sgv_double()));
-        openAPSPredictValue.add(new PointValue((float) (in15mins.getTime() / fuzz),(float) unitized(snoozeBG.floatValue())));
+        openAPSPredictValue.add(new PointValue((float) (in15mins.getTime() / fuzz), (float) unitized(snoozeBG.floatValue())));
     }
     //##### Adds OpenAPS eventualBG to BG chart #####
 
     public ColumnChartData iobcobFutureChart(List<Stats> statArray) { //data*
 
-        List<Column> columnsData = new ArrayList<>();
-        List<SubcolumnValue> values;
-        List<AxisValue> xAxisValues = new ArrayList<AxisValue>();
+        if (!statArray.isEmpty()) {
 
-        try {
-            for (int v=0; v<=statArray.size(); v++) {
-                //iob now
-                values = new ArrayList<>();
+            List<Column> columnsData = new ArrayList<>();
+            List<SubcolumnValue> values;
+            List<AxisValue> xAxisValues = new ArrayList<AxisValue>();
 
-                values.add(new SubcolumnValue((float) (statArray.get(v).iob), ChartUtils.COLOR_GREEN));
-                if (statArray.get(v).cob > 50){                                                     //Enter max 50g carbs on the chart
-                    values.add(new SubcolumnValue((float) (50), ChartUtils.COLOR_ORANGE));
-                } else {
-                    values.add(new SubcolumnValue((float) (statArray.get(v).cob), ChartUtils.COLOR_ORANGE));
+            try {
+                for (int v = 0; v < statArray.size(); v++) {
+                    //iob now
+                    values = new ArrayList<>();
+
+                    values.add(new SubcolumnValue((float) (statArray.get(v).iob), ChartUtils.COLOR_GREEN));
+                    if (statArray.get(v).cob > 50) {                                                     //Enter max 50g carbs on the chart
+                        values.add(new SubcolumnValue((float) (50), ChartUtils.COLOR_ORANGE));
+                    } else {
+                        values.add(new SubcolumnValue((float) (statArray.get(v).cob), ChartUtils.COLOR_ORANGE));
+                    }
+
+                    Column column = new Column(values);
+                    column.setHasLabels(true);
+                    columnsData.add(column);
+
+                    AxisValue axisValue = new AxisValue(v);
+                    axisValue.setLabel(statArray.get(v).when);
+                    xAxisValues.add(axisValue);
+                    //xAxisValues.  add(new AxisValue((long)0, iobcobValues.getJSONObject(v).getString("when")));
                 }
-
-                Column column = new Column(values);
-                column.setHasLabels(true);
-                columnsData.add(column);
-
-                AxisValue axisValue = new AxisValue(v);
-                axisValue.setLabel(statArray.get(v).when);
-                xAxisValues.add(axisValue);
-                //xAxisValues.  add(new AxisValue((long)0, iobcobValues.getJSONObject(v).getString("when")));
+            } catch (Exception e) {
+                Crashlytics.logException(e);
             }
-        } catch (Exception e)  {
 
+            columnData = new ColumnChartData(columnsData);
+            Axis axisX = new Axis(xAxisValues).setHasLines(true);
+
+            columnData.setAxisYLeft(ycobiobAxis());
+            columnData.setAxisXBottom(axisX);
+
+            return columnData;
+
+        } else{
+            return new ColumnChartData(); //empty
         }
-
-        columnData = new ColumnChartData(columnsData);
-        Axis axisX = new Axis(xAxisValues).setHasLines(true);
-
-        columnData.setAxisYLeft(ycobiobAxis());
-        columnData.setAxisXBottom(axisX);
-
-        return columnData;
     }
     public Axis ycobiobAxis() {
         Axis yAxis = new Axis();
@@ -199,7 +215,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
     }
     public Line basalvsTempBasalLine(){
         Line cobValuesLine = new Line(tempBasalValues);
-        cobValuesLine.setColor(ChartUtils.COLOR_ORANGE);
+        cobValuesLine.setColor(ChartUtils.COLOR_BLUE);
         cobValuesLine.setHasLines(true);
         cobValuesLine.setHasPoints(false);
         cobValuesLine.setFilled(true);
@@ -207,14 +223,17 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
         return cobValuesLine;
     }
     public void addBasalvsTempBasalValues(){
+        tempBasalValues.clear();                                                                    //clears past data
         Double basalDelta;
         for (Stats tempBasalReading : statsReadings) {
-            if (tempBasalReading.temp_basal_type.equals("High") || tempBasalReading.temp_basal_type.equals("Low")) {  //Has a Temp Basal been set?
-                basalDelta = tempBasalReading.temp_basal - tempBasalReading.basal;                  //Delta between normal Basal and Temp Basal set
-            } else {
-                basalDelta = 0D;                                                                    //No Temp Basal set
+            if (tempBasalReading != null) {
+                if (tempBasalReading.temp_basal_type.equals("High") || tempBasalReading.temp_basal_type.equals("Low")) {  //Has a Temp Basal been set?
+                    basalDelta = tempBasalReading.temp_basal - tempBasalReading.basal;                  //Delta between normal Basal and Temp Basal set
+                } else {
+                    basalDelta = 0D;                                                                    //No Temp Basal set
+                }
+                tempBasalValues.add(new PointValue((float) (tempBasalReading.datetime / fuzz), basalDelta.floatValue()));
             }
-            tempBasalValues.add(new PointValue((float) (tempBasalReading.datetime/fuzz), basalDelta.floatValue()));
         }
     }
 
@@ -233,10 +252,10 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
         addfutureValues();
         List<Line> lines = new ArrayList<Line>();
         lines.add(minShowLine());
-        lines.add(iobValuesLine());// TODO: 22/09/2015 debugging
         lines.add(cobValuesLine());
-        lines.add(iobFutureLine());// TODO: 22/09/2015 debugging
-        lines.add(cobFutureLine());// TODO: 22/09/2015 debugging
+        lines.add(cobFutureLine());
+        lines.add(iobValuesLine());
+        lines.add(iobFutureLine());
         return lines;
     }
     public Line maxiobcobShowLine() {
@@ -260,6 +279,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
             value.setLabel(String.valueOf(j*2) + "u");
             axisValues.add(value);
         }
+        yAxis.setTextColor(ChartUtils.COLOR_BLUE);
         yAxis.setValues(axisValues);
         yAxis.setHasLines(true);
         yAxis.setMaxLabelChars(5);
@@ -276,6 +296,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
             value.setLabel(String.valueOf(j*10) + "g");
             axisValues.add(value);
         }
+        yAxis.setTextColor(ChartUtils.COLOR_ORANGE);
         yAxis.setValues(axisValues);
         yAxis.setHasLines(true);
         yAxis.setMaxLabelChars(5);
@@ -285,7 +306,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
 
     public Line iobValuesLine(){
         Line iobValuesLine = new Line(iobValues);
-        iobValuesLine.setColor(ChartUtils.COLOR_GREEN);
+        iobValuesLine.setColor(ChartUtils.COLOR_BLUE);
         iobValuesLine.setHasLines(true);
         iobValuesLine.setHasPoints(false);
         iobValuesLine.setFilled(true);
@@ -303,6 +324,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
     }
 
     public void addIOBValues(){
+        iobValues.clear();                                                                          //clears past data
         for (Stats iobReading : statsReadings) {
             if (iobReading.iob > yIOBMax) {
                 iobValues.add(new PointValue((float) (iobReading.datetime/fuzz), (float) fitIOB2COBRange(yIOBMax.floatValue()))); //Do not go above Max IOB
@@ -315,6 +337,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
         }
     }
     public void addCOBValues(){
+        cobValues.clear();                                                                          //clear past data
         for (Stats cobReading : statsReadings) {
             if (cobReading.cob > yCOBMax) {
                 cobValues.add(new PointValue((float) (cobReading.datetime/fuzz), (float) yCOBMax.floatValue())); //Do not go above Max COB
@@ -367,6 +390,7 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
+                Crashlytics.logException(e);
             }
         }
         Line cobValuesLine = new Line(listValues);
@@ -390,11 +414,12 @@ public class ExtendedGraphBuilder extends BgGraphBuilder  {
                     listValues.add(new PointValue((float) (iobFutureValues.getJSONObject(c).getDouble("as_of") / fuzz), (float) iobFutureValues.getJSONObject(c).getDouble("iob")));
                 }
             } catch (JSONException e) {
+                Crashlytics.logException(e);
                 e.printStackTrace();
             }
         }
         Line cobValuesLine = new Line(listValues);
-        cobValuesLine.setColor(ChartUtils.COLOR_GREEN);
+        cobValuesLine.setColor(ChartUtils.COLOR_BLUE);
         cobValuesLine.setHasLines(false);
         cobValuesLine.setHasPoints(true);
         cobValuesLine.setFilled(false);

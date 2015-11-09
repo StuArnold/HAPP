@@ -3,6 +3,7 @@ package com.hypodiabetic.happ;
 
 import android.content.Context;
 
+import com.crashlytics.android.Crashlytics;
 import com.hypodiabetic.happ.Objects.Profile;
 import com.hypodiabetic.happ.Objects.Treatments;
 import com.hypodiabetic.happ.code.nightscout.cob;
@@ -16,6 +17,7 @@ import org.json.JSONObject;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class BolusWizard {
 
@@ -30,18 +32,16 @@ public class BolusWizard {
         JSONObject openAPSNow   = determine_basal.runOpenAPS(c);
         String bgCorrection="";
 
-        Double lastBG       = Bg.last().sgv_double();
-        Double eventualBG   = 0D;
-        Double snoozeBG     = 0D;
-        Double cob          = 0D;
-        Double biob         = 0D;
-        try {
-            eventualBG  = openAPSNow.getDouble("eventualBG");
-            snoozeBG  = openAPSNow.getDouble("snoozeBG");
-            cob         = cobNow.getDouble("cob");
-            biob        = iobNow.getDouble("bolusiob");
-        } catch (JSONException e) {
-        }
+        Bg bg = Bg.last();
+        Double lastBG = 0D;
+        if (bg != null) lastBG = bg.sgv_double();
+
+        Double eventualBG, snoozeBG, cob, biob;
+        eventualBG  = openAPSNow.optDouble("eventualBG",0D);
+        snoozeBG    = openAPSNow.optDouble("snoozeBG",0D);
+        cob         = cobNow.optDouble("cob",0D);
+        biob        = iobNow.optDouble("bolusiob",0D);
+
 
         Double insulin_correction_bg;
         String insulin_correction_bg_maths;
@@ -51,12 +51,22 @@ public class BolusWizard {
         String net_biob_correction_maths        = "(COB(" + cob + ") / Carb Ratio(" + profile.carbRatio + "g)) - BolusIOB(" + biob + ") = " + String.format("%.1f",net_correction_biob) + "U";
         Double insulin_correction_carbs         = carbs / profile.carbRatio;                                            //Insulin required for carbs about to be consumed
         String insulin_correction_carbs_maths   = "Carbs(" + carbs + "g) / Carb Ratio(" + profile.carbRatio + "g) = " + String.format("%.1f",insulin_correction_carbs) + "U";
-        if (snoozeBG >= profile.max_bg || lastBG >= profile.max_bg){                                //HIGH
+        if (lastBG >= profile.max_bg){                                                              //True HIGH
+            insulin_correction_bg       = (lastBG - profile.max_bg) / profile.isf;
+            bgCorrection                = "High";
+            insulin_correction_bg_maths = "BG(" + lastBG + ") - (Max BG(" + profile.max_bg + ") / ISF(" + profile.isf + ")) = " + String.format("%.1f",insulin_correction_bg) + "U";
+
+        } else if (lastBG <= profile.min_bg){                                                       //True LOW
+            insulin_correction_bg       = (lastBG - profile.target_bg) / profile.isf;
+            bgCorrection                = "Low";
+            insulin_correction_bg_maths = "(BG(" + lastBG + ") - Target BG(" + profile.target_bg + ") / ISF(" + profile.isf + ") = " + String.format("%.1f",insulin_correction_bg) + "U";
+
+        } else if (snoozeBG >= profile.max_bg){                                                     //Snooze HIGH
             insulin_correction_bg       = (snoozeBG - profile.max_bg) / profile.isf;
             bgCorrection                = "High";
             insulin_correction_bg_maths = "snoozeBG(" + snoozeBG + ") - (Max BG(" + profile.max_bg + ") / ISF(" + profile.isf + ")) = " + String.format("%.1f",insulin_correction_bg) + "U";
 
-        } else if (snoozeBG <= profile.min_bg || lastBG <= profile.min_bg){                         //LOW
+        } else if (snoozeBG <= profile.min_bg){                                                     //Snooze LOW
             insulin_correction_bg       = (snoozeBG - profile.target_bg) / profile.isf;
             bgCorrection                = "Low";
             insulin_correction_bg_maths = "(snoozeBG(" + snoozeBG + ") - Target BG(" + profile.target_bg + ") / ISF(" + profile.isf + ") = " + String.format("%.1f",insulin_correction_bg) + "U";
@@ -104,6 +114,7 @@ public class BolusWizard {
             reply.put("suggested_bolus",                String.format("%.1f", suggested_bolus));
             reply.put("suggested_bolus_maths",          suggested_bolus_maths);
         } catch (JSONException e) {
+            Crashlytics.logException(e);
         }
         return reply;
 
@@ -115,7 +126,7 @@ public class BolusWizard {
 
 
     //main NS functiuon
-    public static JSONObject run_bw(Context context) {
+    public static JSONObject run_NS_BW(Context context) {
 
         Date dateNow = new Date();
         Profile profile = new Profile().ProfileAsOf(dateNow, context);
@@ -130,6 +141,7 @@ public class BolusWizard {
         try {
             reply.put("cob", cob.cobTotal(cobtreatments, profile, dateNow).getDouble("display"));
         } catch (JSONException e) {
+            Crashlytics.logException(e);
         }
 
         return bwp;
@@ -146,11 +158,17 @@ public class BolusWizard {
             results.put("outcome",0);
             results.put("bolusEstimate",0.0);
         } catch (JSONException e) {
+            Crashlytics.logException(e);
         }
 
         Bg scaled = Bg.last();
-
-        Double results_scaledSGV = scaled.sgv_double();
+        Double results_scaledSGV;
+        if (scaled == null) {
+            return results;                                                                         //exit, as no last BG
+            //results_scaledSGV = scaled.sgv_double();
+        } else {
+            results_scaledSGV = 0D;
+        }
 
         //var errors = checkMissingInfo(sbx);
 
@@ -164,6 +182,7 @@ public class BolusWizard {
             iobValue = iob.iobTotal(treatments, profile, dateNow).getDouble("bolusiob");
         } catch (JSONException e) {
             //Toast.makeText(ApplicationContextProvider.getContext(), "Error getting IOB for bwp_calc", Toast.LENGTH_LONG).show();
+            Crashlytics.logException(e);
         }
 
         Double results_effect = iobValue * profile.isf;
@@ -205,6 +224,7 @@ public class BolusWizard {
                 results.put("tempBasalAdjustment-thirtymin",thirtyMinAdjustment);
                 results.put("tempBasalAdjustment-onehour",oneHourAdjustment);
             } catch (JSONException e) {
+                Crashlytics.logException(e);
             }
         }
 
@@ -217,12 +237,13 @@ public class BolusWizard {
             results.put("scaledSGV",results_scaledSGV);
             results.put("iob",iobValue);
 
-            results.put("bolusEstimateDisplay", String.format("%.2f",results_bolusEstimate));
-            results.put("outcomeDisplay", String.format("%.2f",results_outcome));
-            results.put("displayIOB", String.format("%.2f",iobValue));
-            results.put("effectDisplay", String.format("%.2f",results_effect));
-            results.put("displayLine", "BWP: " + String.format("%.2f",results_bolusEstimate) + "U");
+            results.put("bolusEstimateDisplay", String.format(Locale.ENGLISH, "%.2f",results_bolusEstimate));
+            results.put("outcomeDisplay",       String.format(Locale.ENGLISH, "%.2f",results_outcome));
+            results.put("displayIOB",           String.format(Locale.ENGLISH, "%.2f",iobValue));
+            results.put("effectDisplay", String.format(Locale.ENGLISH, "%.2f",results_effect));
+            results.put("displayLine", "BWP: " + String.format(Locale.ENGLISH, "%.2f",results_bolusEstimate) + "U");
         } catch (JSONException e) {
+            Crashlytics.logException(e);
         }
 
         return results;
@@ -239,21 +260,22 @@ public class BolusWizard {
 
         JSONObject results = new JSONObject();
         try {
-            results.put("BOLUS Insulin on Board", prop.getString("displayIOB") + "U");
+            results.put("BOLUS Insulin on Board", prop.optString("displayIOB", "0") + "U");
             results.put("Sensitivity", "-" + profile.isf + "U");
-            results.put("Expected effect", prop.getString("displayIOB") + " x -" + profile.isf + "= -" + prop.getString("effectDisplay") );
-            results.put("Expected outcome", prop.getString("scaledSGV") + "-" + prop.getString("effectDisplay") + " = " + prop.getString("outcomeDisplay"));
+            results.put("Expected effect", prop.optString("displayIOB","0") + " x -" + profile.isf + "= -" + prop.optString("effectDisplay", "0") );
+            results.put("Expected outcome", prop.optString("scaledSGV", "0") + "-" + prop.optString("effectDisplay", "0") + " = " + prop.optString("outcomeDisplay", "0"));
 
             // TODO: 02/09/2015 these items should be put at the top of the JSON object, poss in reverse order
-            if (prop.getDouble("bolusEstimate") < 0) {
+            if (prop.optDouble("bolusEstimate", 0D) < 0) {
                 //info.unshift({label: '---------', value: ''});
-                Double carbEquivalent = Math.ceil(Math.abs(profile.carbRatio * prop.getDouble("bolusEstimate")));
-                results.put("Carb Equivalent", prop.getString("bolusEstimateDisplay") + "U * " + profile.carbRatio + " = " + carbEquivalent + "g");
+                Double carbEquivalent = Math.ceil(Math.abs(profile.carbRatio * prop.optDouble("bolusEstimate", 0D)));
+                results.put("Carb Equivalent", prop.optString("bolusEstimateDisplay", "0") + "U * " + profile.carbRatio + " = " + carbEquivalent + "g");
                 results.put("Current Carb Ratio", "1U for " + profile.carbRatio + "g");
-                results.put("-BWP", prop.getString("bolusEstimateDisplay") + "U, maybe covered by carbs?");
+                results.put("-BWP", prop.optString("bolusEstimateDisplay", "0") + "U, maybe covered by carbs?");
             }
 
         } catch (JSONException e) {
+            Crashlytics.logException(e);
         }
 
         return results;
